@@ -1,0 +1,4 @@
+<linker>
+    <assembly fullname="AssemblyName" preserve="all"/>
+    <assembly fullname="AnotherAssemblyName" preserve="none"/>
+</linker>
