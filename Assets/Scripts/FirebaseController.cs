@@ -8,8 +8,6 @@ using Firebase.Auth;
 using System;
 using System.Threading.Tasks;
 using Firebase.Extensions;
-using System.Diagnostics;
-
 
 public class FirebaseController : MonoBehaviour
 {
@@ -23,8 +21,11 @@ public class FirebaseController : MonoBehaviour
     Firebase.Auth.FirebaseAuth auth;
     Firebase.Auth.FirebaseUser user;
 
-
     bool isSignIn = false;
+
+    private const string EMAIL_PREF_KEY = "email";
+    private const string PASSWORD_PREF_KEY = "password";
+    private const string REMEMBER_ME_PREF_KEY = "rememberMe";
 
     private void Start()
     {
@@ -32,82 +33,79 @@ public class FirebaseController : MonoBehaviour
             var dependencyStatus = task.Result;
             if (dependencyStatus == Firebase.DependencyStatus.Available)
             {
-                // Create and hold a reference to your FirebaseApp,
-                // where app is a Firebase.FirebaseApp property of your application class.
                 InitializeFirebase();
-
-                // Set a flag here to indicate whether Firebase is ready to use by your app.
+                LoadSavedCredentials(); // Kullan?c? bilgilerini yükle
             }
             else
             {
                 UnityEngine.Debug.LogError(System.String.Format(
                   "Could not resolve all Firebase dependencies: {0}", dependencyStatus));
-                // Firebase Unity SDK is not safe to use here.
             }
         });
     }
 
     public void OpenLoginPanel()
     {
-
         loginPanel.SetActive(true);
         signupPanel.SetActive(false);
         profilePanel.SetActive(false);
         forgetPasswordPanel.SetActive(false);
+        ClearLoginFields(); // Giri? alanlar?n? temizle
     }
+
+    private void ClearLoginFields()
+    {
+        loginEmail.text = "";
+        loginPassword.text = ""; // Giri? alanlar?n? temizleme
+    }
+
     public void OpenSignUpPanel()
     {
-
         loginPanel.SetActive(false);
         signupPanel.SetActive(true);
         profilePanel.SetActive(false);
         forgetPasswordPanel.SetActive(false);
-
+        ClearSignupFields(); // Kay?t alanlar?n? temizle
     }
+
     public void OpenProfilePanel()
     {
-
         loginPanel.SetActive(false);
         signupPanel.SetActive(false);
         profilePanel.SetActive(true);
         forgetPasswordPanel.SetActive(false);
-
     }
-    public void OpenPorgetPassPanel()
-    {
 
+    public void OpenForgetPassPanel()
+    {
         loginPanel.SetActive(false);
         signupPanel.SetActive(false);
         profilePanel.SetActive(false);
         forgetPasswordPanel.SetActive(true);
-
     }
-
 
     public void LoginUser()
     {
-        if (string.IsNullOrEmpty(loginEmail.text) && string.IsNullOrEmpty(loginPassword.text))
+        if (string.IsNullOrEmpty(loginEmail.text) || string.IsNullOrEmpty(loginPassword.text))
         {
             ShowNotificationMessage("Error", "Fields Empty! Please Input All Details");
-
             return;
         }
+
         // Do Login  
         SignInUser(loginEmail.text, loginPassword.text);
     }
 
-
     public void SignUpUser()
     {
-        if (string.IsNullOrEmpty(signupEmail.text) && string.IsNullOrEmpty(signupPassword.text) && string.IsNullOrEmpty(signupCPassword.text) && string.IsNullOrEmpty(signupUserName.text))
+        if (string.IsNullOrEmpty(signupEmail.text) || string.IsNullOrEmpty(signupPassword.text) ||
+            string.IsNullOrEmpty(signupCPassword.text) || string.IsNullOrEmpty(signupUserName.text))
         {
             ShowNotificationMessage("Error", "Fields Empty! Please Input All Details");
-
             return;
         }
 
-        //Do SignUp
-
+        // Do SignUp
         CreateUser(signupEmail.text, signupPassword.text, signupUserName.text);
     }
 
@@ -121,11 +119,10 @@ public class FirebaseController : MonoBehaviour
         ForgetPasswordSubmit(forgetPassEmail.text);
     }
 
-
     private void ShowNotificationMessage(string title, string message)
     {
-        notifTitleText.text = "" + title;
-        notifMessageText.text = "" + message;
+        notifTitleText.text = title;
+        notifMessageText.text = message;
 
         notificationPanel.SetActive(true);
     }
@@ -143,8 +140,10 @@ public class FirebaseController : MonoBehaviour
         auth.SignOut();
         profileUserNameText.text = "";
         profileUserEmailText.text = "";
+        PlayerPrefs.DeleteKey(EMAIL_PREF_KEY);
+        PlayerPrefs.DeleteKey(PASSWORD_PREF_KEY);
+        PlayerPrefs.DeleteKey(REMEMBER_ME_PREF_KEY); // Logout s?ras?nda bilgileri sil
         OpenLoginPanel();
-
     }
 
     void CreateUser(string email, string password, string userName)
@@ -158,11 +157,8 @@ public class FirebaseController : MonoBehaviour
             if (task.IsFaulted)
             {
                 UnityEngine.Debug.LogError("CreateUserWithEmailAndPasswordAsync encountered an error: " + task.Exception);
-
-
                 foreach (Exception exception in task.Exception.Flatten().InnerExceptions)
                 {
-
                     Firebase.FirebaseException firebaseEx = exception as Firebase.FirebaseException;
                     if (firebaseEx != null)
                     {
@@ -170,15 +166,11 @@ public class FirebaseController : MonoBehaviour
                         ShowNotificationMessage("Error", GetErrorMessage(errorCode));
                     }
                 }
-
                 return;
             }
 
-            // Firebase user has been created.
             Firebase.Auth.AuthResult result = task.Result;
-            UnityEngine.Debug.LogFormat("Firebase user created successfully: {0} ({1})",
-                result.User.DisplayName, result.User.UserId);
-
+            UnityEngine.Debug.LogFormat("Firebase user created successfully: {0} ({1})", result.User.DisplayName, result.User.UserId);
             UpdateUserProfile(userName);
         });
     }
@@ -189,17 +181,13 @@ public class FirebaseController : MonoBehaviour
             if (task.IsCanceled)
             {
                 UnityEngine.Debug.LogError("SignInWithEmailAndPasswordAsync was canceled.");
-
                 return;
             }
             if (task.IsFaulted)
             {
                 UnityEngine.Debug.LogError("SignInWithEmailAndPasswordAsync encountered an error: " + task.Exception);
-
                 foreach (Exception exception in task.Exception.Flatten().InnerExceptions)
                 {
-
-
                     Firebase.FirebaseException firebaseEx = exception as Firebase.FirebaseException;
                     if (firebaseEx != null)
                     {
@@ -207,19 +195,47 @@ public class FirebaseController : MonoBehaviour
                         ShowNotificationMessage("Error", GetErrorMessage(errorCode));
                     }
                 }
-
                 return;
             }
 
             Firebase.Auth.FirebaseUser newUser = task.Result.User;
+            UnityEngine.Debug.LogFormat("User signed in successfully: {0} ({1})", newUser.DisplayName, newUser.UserId);
 
-            UnityEngine.Debug.LogFormat("User signed in successfully: {0} ({1})",
-                newUser.DisplayName, newUser.UserId);
-
-            profileUserNameText.text = "" + newUser.DisplayName;
-            profileUserEmailText.text = "" + newUser.Email;
+            profileUserNameText.text = newUser.DisplayName; // Kullan?c? ad? burada ayarlan?r
+            profileUserEmailText.text = newUser.Email;
             OpenProfilePanel();
+
+            // Remember Me kontrolü
+            if (rememberMe.isOn)
+            {
+                PlayerPrefs.SetString(EMAIL_PREF_KEY, newUser.Email);
+                PlayerPrefs.SetString(PASSWORD_PREF_KEY, loginPassword.text);
+                PlayerPrefs.SetInt(REMEMBER_ME_PREF_KEY, 1); // 1: true
+            }
+            else
+            {
+                PlayerPrefs.DeleteKey(EMAIL_PREF_KEY);
+                PlayerPrefs.DeleteKey(PASSWORD_PREF_KEY);
+                PlayerPrefs.DeleteKey(REMEMBER_ME_PREF_KEY); // 0: false
+            }
+            PlayerPrefs.Save(); // De?i?iklikleri kaydet
         });
+    }
+
+    private void LoadSavedCredentials()
+    {
+        if (PlayerPrefs.GetInt(REMEMBER_ME_PREF_KEY, 0) == 1)
+        {
+            // Kullan?c? bilgilerini yükle
+            string savedEmail = PlayerPrefs.GetString(EMAIL_PREF_KEY);
+            string savedPassword = PlayerPrefs.GetString(PASSWORD_PREF_KEY);
+            loginEmail.text = savedEmail;
+            loginPassword.text = savedPassword;
+
+            // Giri? yap
+            SignInUser(savedEmail, savedPassword);
+            rememberMe.isOn = true; // Toggle durumunu ayarla
+        }
     }
 
     void InitializeFirebase()
@@ -233,8 +249,7 @@ public class FirebaseController : MonoBehaviour
     {
         if (auth.CurrentUser != user)
         {
-            bool signedIn = user != auth.CurrentUser && auth.CurrentUser != null
-                && auth.CurrentUser.IsValid();
+            bool signedIn = user != auth.CurrentUser && auth.CurrentUser != null && auth.CurrentUser.IsValid();
             if (!signedIn && user != null)
             {
                 UnityEngine.Debug.Log("Signed out " + user.UserId);
@@ -243,128 +258,88 @@ public class FirebaseController : MonoBehaviour
             if (signedIn)
             {
                 UnityEngine.Debug.Log("Signed in " + user.UserId);
-
-                isSignIn = true;
-
-
             }
         }
-    }
-    void OnDestroy()
-    {
-        auth.StateChanged -= AuthStateChanged;
-        auth = null;
     }
 
     void UpdateUserProfile(string userName)
     {
-        Firebase.Auth.FirebaseUser user = auth.CurrentUser;
-        if (user != null)
+        user = auth.CurrentUser;
+        var profile = new Firebase.Auth.UserProfile
         {
-            Firebase.Auth.UserProfile profile = new Firebase.Auth.UserProfile
+            DisplayName = userName,
+            PhotoUrl = null // ?sterseniz foto?raf URL'si ekleyebilirsiniz
+        };
+
+        user.UpdateUserProfileAsync(profile).ContinueWithOnMainThread(task => {
+            if (task.IsCanceled)
             {
-                DisplayName = userName,
-                PhotoUrl = new System.Uri("https://via.placeholder.com/150C/0%20https:/placeholder.com/"),
-            };
-            user.UpdateUserProfileAsync(profile).ContinueWith(task => {
-                if (task.IsCanceled)
-                {
-                    UnityEngine.Debug.LogError("UpdateUserProfileAsync was canceled.");
-                    return;
-                }
-                if (task.IsFaulted)
-                {
-                    UnityEngine.Debug.LogError("UpdateUserProfileAsync encountered an error: " + task.Exception);
-                    return;
-                }
-
-                UnityEngine.Debug.Log("User profile updated successfully.");
-
-                ShowNotificationMessage("Alert", "Account Successfully Created");
-            });
-        }
-    }
-
-
-    bool isSigned = false;
-    void Update()
-    {
-        if (isSignIn)
-        {
-            if (!isSigned)
+                UnityEngine.Debug.LogError("UpdateUserProfileAsync was canceled.");
+                return;
+            }
+            if (task.IsFaulted)
             {
-                isSigned = true;
-                profileUserNameText.text = "" + user.DisplayName;
-                profileUserEmailText.text = "" + user.Email;
-                OpenProfilePanel();
+                UnityEngine.Debug.LogError("UpdateUserProfileAsync encountered an error: " + task.Exception);
+                return;
             }
 
-        }
+            UnityEngine.Debug.Log("User profile updated successfully.");
+            profileUserNameText.text = user.DisplayName; // Kullan?c? ad?n? profil sayfas?na güncelle
+            profileUserEmailText.text = user.Email;
+            OpenProfilePanel(); // Profil sayfas?n? aç
+        });
     }
 
-
-    private static string GetErrorMessage(AuthError errorCode)
+    private string GetErrorMessage(AuthError errorCode)
     {
-        var message = "";
+        string message;
         switch (errorCode)
         {
-            case AuthError.AccountExistsWithDifferentCredentials:
-                message = "An account already exists with different credentials.";
-                break;
-            case AuthError.MissingPassword:
-                message = "Password is missing.";
-                break;
-            case AuthError.WeakPassword:
-                message = "The password is too weak.";
-                break;
-            case AuthError.WrongPassword:
-                message = "The password is incorrect.";
+            case AuthError.InvalidEmail:
+                message = "The email address is badly formatted.";
                 break;
             case AuthError.EmailAlreadyInUse:
-                message = "An account already exists with this email address.";
+                message = "The email address is already in use by another account.";
                 break;
-            case AuthError.InvalidEmail:
-                message = "Invalid email address.";
+            case AuthError.WrongPassword:
+                message = "The password is invalid or the user does not have a password.";
                 break;
-            case AuthError.MissingEmail:
-                message = "Email address is missing.";
+            case AuthError.UserNotFound:
+                message = "There is no user corresponding to the email address.";
+                break;
+            case AuthError.OperationNotAllowed:
+                message = "Operation is not allowed. Please enable email/password accounts.";
                 break;
             default:
-                message = "An error occurred.";
+                message = "An unknown error occurred.";
                 break;
         }
         return message;
     }
 
-    void ForgetPasswordSubmit(string forgetPasswordEmail)
+    private void ForgetPasswordSubmit(string email)
     {
-        auth.SendPasswordResetEmailAsync(forgetPasswordEmail).ContinueWithOnMainThread(task => {
-
+        auth.SendPasswordResetEmailAsync(email).ContinueWithOnMainThread(task => {
             if (task.IsCanceled)
             {
-                UnityEngine.Debug.LogError("SendPasswordResetEmailAsync was canceled");
+                UnityEngine.Debug.LogError("SendPasswordResetEmailAsync was canceled.");
+                return;
             }
-
             if (task.IsFaulted)
             {
-                foreach (Exception exception in task.Exception.Flatten().InnerExceptions)
-                {
-
-
-                    Firebase.FirebaseException firebaseEx = exception as Firebase.FirebaseException;
-                    if (firebaseEx != null)
-                    {
-                        var errorCode = (AuthError)firebaseEx.ErrorCode;
-                        ShowNotificationMessage("Error", GetErrorMessage(errorCode));
-                    }
-                }
+                UnityEngine.Debug.LogError("SendPasswordResetEmailAsync encountered an error: " + task.Exception);
+                ShowNotificationMessage("Error", "Could not send password reset email.");
+                return;
             }
-
-            ShowNotificationMessage("Alert", "Successfully Send Email For Reset Password");
-        }
-);
+            ShowNotificationMessage("Alert", "Password reset email sent successfully.");
+        });
     }
 
+    private void ClearSignupFields()
+    {
+        signupEmail.text = "";
+        signupPassword.text = "";
+        signupCPassword.text = "";
+        signupUserName.text = ""; // Kullan?c? ad? alan?n? temizle
+    }
 }
-
-
