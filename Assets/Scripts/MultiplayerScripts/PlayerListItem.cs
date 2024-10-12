@@ -4,11 +4,12 @@ using UnityEngine;
 using UnityEngine.UI;
 using Photon.Realtime;
 using Photon.Pun;
+using TMPro;
 
 public class PlayerListItem : MonoBehaviourPunCallbacks
 {
 
-    public Text playerUsername;
+    public TextMeshProUGUI playerUsername;
 
     Player player;
 

@@ -9,9 +9,9 @@ public class RoomListItem : MonoBehaviour
 {
     [SerializeField] TextMeshProUGUI roomNameText;
 
-    RoomInfo info;
+    public RoomInfo info;
 
-   
+
 
     public void SetUp(RoomInfo _info)
     {
@@ -23,5 +23,5 @@ public class RoomListItem : MonoBehaviour
     {
         Launcher.Instance.JoinRoom(info);
     }
-        
+
 }
