@@ -18,7 +18,7 @@ dependencyResolutionManagement {
         mavenCentral()
 // Android Resolver Repos Start
         maven {
-            url "file:///C:/UnityProjeler/AndroidApp/BilVeyaAtla/Assets/GeneratedLocalRepo/Firebase/m2repository" // Assets/Firebase/Editor/AppDependencies.xml:22, Assets/Firebase/Editor/AuthDependencies.xml:20
+            url "file:///C:/UnityProjeler/AndroidApp/BilVeyaAtla/Assets/GeneratedLocalRepo/Firebase/m2repository" // Assets/Firebase/Editor/AppDependencies.xml:22, Assets/Firebase/Editor/AuthDependencies.xml:20, Assets/Firebase/Editor/DatabaseDependencies.xml:22, Assets/Firebase/Editor/FirestoreDependencies.xml:20
         }
         mavenLocal()
 // Android Resolver Repos End

@@ -8,6 +8,8 @@ using Firebase.Auth;
 using System;
 using System.Threading.Tasks;
 using Firebase.Extensions;
+using UnityEngine.SceneManagement;
+using Firebase.Firestore;
 
 public class FirebaseController : MonoBehaviour
 {
@@ -27,6 +29,16 @@ public class FirebaseController : MonoBehaviour
     private const string PASSWORD_PREF_KEY = "password";
     private const string REMEMBER_ME_PREF_KEY = "rememberMe";
 
+
+    private AuthManager authManager; // AuthManager referans?
+
+
+ 
+    FirebaseFirestore db;
+
+
+
+
     private void Start()
     {
         Firebase.FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task => {
@@ -42,6 +54,10 @@ public class FirebaseController : MonoBehaviour
                   "Could not resolve all Firebase dependencies: {0}", dependencyStatus));
             }
         });
+
+        authManager = FindObjectOfType<AuthManager>();
+        auth = FirebaseAuth.DefaultInstance;
+        db = FirebaseFirestore.DefaultInstance;
     }
 
     public void OpenLoginPanel()
@@ -84,7 +100,7 @@ public class FirebaseController : MonoBehaviour
         forgetPasswordPanel.SetActive(true);
     }
 
-    public void LoginUser()
+    public async void LoginUser()
     {
         if (string.IsNullOrEmpty(loginEmail.text) || string.IsNullOrEmpty(loginPassword.text))
         {
@@ -92,8 +108,8 @@ public class FirebaseController : MonoBehaviour
             return;
         }
 
-        // Do Login  
-        SignInUser(loginEmail.text, loginPassword.text);
+       
+        SceneManager.LoadScene(1);
     }
 
     public void SignUpUser()
@@ -342,4 +358,48 @@ public class FirebaseController : MonoBehaviour
         signupCPassword.text = "";
         signupUserName.text = ""; // Kullan?c? ad? alan?n? temizle
     }
+
+
+    public void OnPlayerJoinedRoom()
+    {
+        string userId = auth.CurrentUser.UserId; // Oturum açan kullan?c?n?n ID'sini al
+        FirebaseController firebaseController = FindObjectOfType<FirebaseController>();
+
+        firebaseController.GetUserName(userId, (userName) =>
+        {
+            // Oda oyuncu listesine ekle
+            AddPlayerToRoomList(userName);
+        });
+    }
+
+    private void AddPlayerToRoomList(string playerName)
+    {
+        // Odaya kat?lan oyuncu ismini listeye ekleyin
+        Debug.Log($"Player joined: {playerName}");
+        // Bu noktada Photon'un oyuncu listesini güncelleyebilirsin
+    }
+
+
+
+    public void GetUserName(string userId, System.Action<string> callback)
+    {
+        DocumentReference docRef = db.Collection("users").Document(userId);
+        docRef.GetSnapshotAsync().ContinueWith(task =>
+        {
+            if (task.IsCompleted)
+            {
+                DocumentSnapshot snapshot = task.Result;
+                if (snapshot.Exists)
+                {
+                    string userName = snapshot.GetValue<string>("username"); // "username" alan? Firestore'da tan?mlanmal?
+                    callback(userName);
+                }
+                else
+                {
+                    Debug.LogError("No such user!");
+                }
+            }
+        });
+    }
+
 }
