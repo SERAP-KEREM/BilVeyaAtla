@@ -16,7 +16,7 @@ public class PlayerListItem : MonoBehaviourPunCallbacks
     public void SetUp(Player _player)
     {
         player = _player;
-        playerUsername.text = _player.NickName;
+        playerUsername.text = PlayerPrefs.GetString("UserName");
     }
 
     public override void OnPlayerLeftRoom(Player otherPlayer)
