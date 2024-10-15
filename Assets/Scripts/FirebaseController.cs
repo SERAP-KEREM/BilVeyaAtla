@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,6 +9,8 @@ using System;
 using System.Threading.Tasks;
 using Firebase.Extensions;
 using UnityEngine.SceneManagement;
+using Photon.Pun;
+using Firebase.Firestore;
 
 public class FirebaseController : MonoBehaviour
 {
@@ -31,7 +33,7 @@ public class FirebaseController : MonoBehaviour
             if (dependencyStatus == Firebase.DependencyStatus.Available)
             {
                 InitializeFirebase();
-                LoadSavedCredentials(); // Kullan?c? bilgilerini y�kle
+                LoadSavedCredentials(); // Kullanıcı bilgilerini yükle
             }
             else
             {
@@ -48,7 +50,7 @@ public class FirebaseController : MonoBehaviour
         forgetPasswordPanel.SetActive(false);
     }
 
-    public void OpenSignupPanel() // Kay?t paneli a�ma metodu
+    public void OpenSignupPanel() // Kayıt paneli açma metodu
     {
         signupPanel.SetActive(true);
         loginPanel.SetActive(false);
@@ -56,7 +58,7 @@ public class FirebaseController : MonoBehaviour
         forgetPasswordPanel.SetActive(false);
     }
 
-    public void OpenProfilePanel() // Profil paneli a�ma metodu
+    public void OpenProfilePanel() // Profil paneli açma metodu
     {
         profilePanel.SetActive(true);
         loginPanel.SetActive(false);
@@ -64,7 +66,7 @@ public class FirebaseController : MonoBehaviour
         forgetPasswordPanel.SetActive(false);
     }
 
-    public void OpenForgetPasswordPanel() // ?ifre unutma paneli a�ma metodu
+    public void OpenForgetPasswordPanel() // Şifre unutma paneli açma metodu
     {
         forgetPasswordPanel.SetActive(true);
         loginPanel.SetActive(false);
@@ -92,7 +94,6 @@ public class FirebaseController : MonoBehaviour
         }
 
         CreateUser(signupEmail.text, signupPassword.text, signupUserName.text);
-        SceneManager.LoadScene(1);
     }
 
     public void ForgetPass()
@@ -132,8 +133,8 @@ public class FirebaseController : MonoBehaviour
         auth.SignOut();
         profileUserNameText.text = "";
         profileUserEmailText.text = "";
-        PlayerPrefs.DeleteKey("UserEmail"); // Kullan?c? e-posta bilgilerini sil
-        PlayerPrefs.DeleteKey("UserPassword"); // Kullan?c? ?ifre bilgilerini sil
+        PlayerPrefs.DeleteKey("UserEmail"); // Kullanıcı e-posta bilgilerini sil
+        PlayerPrefs.DeleteKey("UserPassword"); // Kullanıcı şifre bilgilerini sil
         OpenLoginPanel();
     }
 
@@ -149,7 +150,11 @@ public class FirebaseController : MonoBehaviour
             Firebase.Auth.AuthResult result = task.Result;
             Debug.LogFormat("Firebase user created successfully: {0} ({1})", result.User.DisplayName, result.User.UserId);
             UpdateUserProfile(userName);
+
+            // Kullanıcı bilgilerini Firestore'a kaydedin
+            SaveUserToFirestore(result.User.UserId, userName, email);
         });
+
     }
 
     public void SignInUser(string email, string password)
@@ -164,17 +169,13 @@ public class FirebaseController : MonoBehaviour
             Firebase.Auth.FirebaseUser newUser = task.Result.User;
             Debug.LogFormat("User signed in successfully: {0} ({1})", newUser.DisplayName, newUser.UserId);
 
+            // Oyuncunun adını Photon'a ayarlayın
+            PhotonNetwork.LocalPlayer.NickName = newUser.DisplayName;
+
+            // Profil bilgilerini güncelleyin
             profileUserNameText.text = newUser.DisplayName;
             profileUserEmailText.text = newUser.Email;
 
-            // Kullan?c? bilgilerini hat?rlamak i�in kaydet
-            if (rememberMe.isOn)
-            {
-                PlayerPrefs.SetString("UserName", newUser.DisplayName);
-                PlayerPrefs.SetString("UserEmail", newUser.Email);
-                PlayerPrefs.SetString("UserPassword", password); // ?ifreyi de kaydet
-                PlayerPrefs.Save();
-            }
             OpenProfilePanel();
         });
     }
@@ -207,6 +208,7 @@ public class FirebaseController : MonoBehaviour
     {
         SceneManager.LoadScene(1);
     }
+
     void OnDestroy()
     {
         auth.StateChanged -= AuthStateChanged;
@@ -234,6 +236,26 @@ public class FirebaseController : MonoBehaviour
                 ShowNotificationMessage("Alert", "Account Successfully Created");
             });
         }
+    }
+
+    void SaveUserToFirestore(string userId, string userName, string email)
+    {
+        // Firestore bağlantısı oluşturun ve kullanıcı verilerini kaydedin
+        var db = Firebase.Firestore.FirebaseFirestore.DefaultInstance;
+        var userDoc = db.Collection("users").Document(userId);
+
+        var userData = new { userName = userName, email = email };
+
+        userDoc.SetAsync(userData).ContinueWithOnMainThread(task => {
+            if (task.IsFaulted || task.IsCanceled)
+            {
+                Debug.LogError("Failed to save user to Firestore: " + task.Exception);
+            }
+            else
+            {
+                Debug.Log("User saved to Firestore successfully.");
+            }
+        });
     }
 
     void LoadSavedCredentials()
@@ -276,21 +298,17 @@ public class FirebaseController : MonoBehaviour
         };
     }
 
-    void ForgetPasswordSubmit(string forgetPasswordEmail)
+    void ForgetPasswordSubmit(string email)
     {
-        auth.SendPasswordResetEmailAsync(forgetPasswordEmail).ContinueWithOnMainThread(task => {
-            if (task.IsCanceled)
-            {
-                Debug.LogError("SendPasswordResetEmailAsync was canceled");
-                return;
-            }
-            if (task.IsFaulted)
+        auth.SendPasswordResetEmailAsync(email).ContinueWithOnMainThread(task => {
+            if (task.IsCanceled || task.IsFaulted)
             {
                 HandleAuthTaskError(task);
                 return;
             }
 
-            ShowNotificationMessage("Alert", "Successfully Sent Email For Reset Password");
+            Debug.Log("Password reset email sent successfully.");
+            ShowNotificationMessage("Success", "Password reset email sent. Please check your inbox.");
         });
     }
 }

@@ -82,7 +82,7 @@ public class Launcher : MonoBehaviourPunCallbacks
 
         for (int i = 0; i < players.Count(); i++)
         {
-            Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(players[i]);
+            Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(players[i].UserId);
 
         }
 
@@ -137,7 +137,7 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnPlayerEnteredRoom(Player newplayer)
     {
-        Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(newplayer);
+        Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(newplayer.UserId);
     }
 
 
