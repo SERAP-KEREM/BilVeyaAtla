@@ -169,16 +169,18 @@ public class FirebaseController : MonoBehaviour
             Firebase.Auth.FirebaseUser newUser = task.Result.User;
             Debug.LogFormat("User signed in successfully: {0} ({1})", newUser.DisplayName, newUser.UserId);
 
-            // Oyuncunun adını Photon'a ayarlayın
-            PhotonNetwork.LocalPlayer.NickName = newUser.DisplayName;
 
             // Profil bilgilerini güncelleyin
             profileUserNameText.text = newUser.DisplayName;
             profileUserEmailText.text = newUser.Email;
 
+            // Kullanıcı verilerini Firestore'a kaydet
+            SaveUserToFirestore(newUser.UserId, newUser.DisplayName, newUser.Email);
+
             OpenProfilePanel();
         });
     }
+
 
     void InitializeFirebase()
     {

@@ -6,6 +6,12 @@ using UnityEngine.UI;
 using TMPro;
 using Photon.Realtime;
 using System.Linq;
+using Firebase.Extensions;
+using System;
+using System.Threading.Tasks;
+using Firebase.Firestore;
+using Firebase.Auth;
+
 public class Launcher : MonoBehaviourPunCallbacks
 {
     public static Launcher Instance;
@@ -49,12 +55,38 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnJoinedLobby()
     {
-
         MenuManager.instance.OpenMenu("TitleMenu");
         Debug.Log("Joined Lobby");
-        PhotonNetwork.NickName = PlayerPrefs.GetString("UserName");
 
+        string email = Display.text;
+
+        FetchUserDataByEmail(email, (userData) =>
+        {
+            if (userData != null)
+            {
+                // Kullan?c? ad? de?erini al
+                if (userData.TryGetValue("userName", out object userName))
+                {
+                    PhotonNetwork.NickName = userName as string; // Kullan?c? ad? ile güncelle
+                    Debug.Log("User NickName set to: " + PhotonNetwork.NickName);
+                }
+                else
+                {
+                    Debug.Log("User name is empty or not found.");
+                }
+            }
+            else
+            {
+                Debug.Log("Failed to fetch user data.");
+            }
+        });
+
+
+
+       
     }
+
+
 
     public void CreateRoom()
     {
@@ -82,7 +114,7 @@ public class Launcher : MonoBehaviourPunCallbacks
 
         for (int i = 0; i < players.Count(); i++)
         {
-            Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(players[i].UserId);
+            Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(players[i]);
 
         }
 
@@ -137,11 +169,48 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     public override void OnPlayerEnteredRoom(Player newplayer)
     {
-        Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(newplayer.UserId);
+        Instantiate(playerListItemPrefab, playerListContent).GetComponent<PlayerListItem>().SetUp(newplayer);
     }
 
 
+    void FetchUserDataByEmail(string email, Action<Dictionary<string, object>> callback)
+    {
+        var db = Firebase.Firestore.FirebaseFirestore.DefaultInstance;
 
+        db.Collection("users")
+            .WhereEqualTo("email", email)  // E-posta ile e?le?en belgeleri al
+            .GetSnapshotAsync()
+            .ContinueWithOnMainThread(task =>
+            {
+                if (task.IsFaulted || task.IsCanceled)
+                {
+                    Debug.LogError("Failed to retrieve user data: " + task.Exception);
+                    callback(null); // Hata durumunda geri ça?r?y? tetikle
+                    return;
+                }
 
+                var snapshot = task.Result;
+                if (snapshot.Count > 0)
+                {
+                    foreach (var document in snapshot.Documents)
+                    {
+                        // Kullan?c? verilerini almak için Dictionary olu?tur
+                        var userData = new Dictionary<string, object>
+                        {
+                        { "userName", document.GetValue<string>("userName") },
+                        { "email", document.GetValue<string>("email") }
+                        };
 
+                        // Geri ça?r?y? tetikle
+                        callback(userData);
+                        return;
+                    }
+                }
+                else
+                {
+                    Debug.Log("No user found with the provided email.");
+                    callback(null); // Kullan?c? bulunamad???nda geri ça?r?y? tetikle
+                }
+            });
+    }
 }
