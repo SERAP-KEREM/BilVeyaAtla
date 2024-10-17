@@ -57,8 +57,8 @@ public class Launcher : MonoBehaviourPunCallbacks
     {
         MenuManager.instance.OpenMenu("TitleMenu");
         Debug.Log("Joined Lobby");
-
-        string email = Display.text;
+       // PlayerPrefs.GetString("Email");
+        string email = PlayerPrefs.GetString("Email");
 
         FetchUserDataByEmail(email, (userData) =>
         {

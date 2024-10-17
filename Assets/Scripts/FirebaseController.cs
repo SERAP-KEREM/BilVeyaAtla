@@ -83,6 +83,7 @@ public class FirebaseController : MonoBehaviour
         }
 
         SignInUser(loginEmail.text, loginPassword.text);
+        OpenProfilePanel();
     }
 
     public void SignUpUser()
@@ -94,6 +95,8 @@ public class FirebaseController : MonoBehaviour
         }
 
         CreateUser(signupEmail.text, signupPassword.text, signupUserName.text);
+        SignInUser(signupEmail.text, signupPassword.text);
+        OpenProfilePanel();
     }
 
     public void ForgetPass()
@@ -173,11 +176,12 @@ public class FirebaseController : MonoBehaviour
             // Profil bilgilerini güncelleyin
             profileUserNameText.text = newUser.DisplayName;
             profileUserEmailText.text = newUser.Email;
-
+            PlayerPrefs.SetString("Email", newUser.Email);
+            PlayerPrefs.SetString("DisplayName", newUser.DisplayName);
             // Kullanıcı verilerini Firestore'a kaydet
             SaveUserToFirestore(newUser.UserId, newUser.DisplayName, newUser.Email);
 
-            OpenProfilePanel();
+           
         });
     }
 
