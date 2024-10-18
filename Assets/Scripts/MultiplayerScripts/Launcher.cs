@@ -11,6 +11,7 @@ using System;
 using System.Threading.Tasks;
 using Firebase.Firestore;
 using Firebase.Auth;
+using Random = UnityEngine.Random;
 
 public class Launcher : MonoBehaviourPunCallbacks
 {
@@ -31,7 +32,7 @@ public class Launcher : MonoBehaviourPunCallbacks
     [SerializeField] Transform playerListContent;
 
     public GameObject startButton;
-
+    FirebaseController _firebaseController;
 
     private void Awake()
     {
@@ -53,39 +54,24 @@ public class Launcher : MonoBehaviourPunCallbacks
 
     }
 
+    //public override void OnJoinedLobby()
+    //{
+    //    MenuManager.instance.OpenMenu("TitleMenu");
+    //    Debug.Log("Joined Lobby");
+
+    //    // Kullan?c? ad?n? PhotonNetwork'e ayarla
+    //    PhotonNetwork.NickName = _firebaseController.userName; // userName burada, giri? yapt???n?zda atanm?? olmal?
+    //    Debug.Log("User NickName set to: " + PhotonNetwork.NickName);
+    //}
+
     public override void OnJoinedLobby()
     {
+
         MenuManager.instance.OpenMenu("TitleMenu");
         Debug.Log("Joined Lobby");
-       // PlayerPrefs.GetString("Email");
-        string email = PlayerPrefs.GetString("Email");
+        PhotonNetwork.NickName = "Player " + Random.Range(0, 1000).ToString("0000");
 
-        FetchUserDataByEmail(email, (userData) =>
-        {
-            if (userData != null)
-            {
-                // Kullan?c? ad? de?erini al
-                if (userData.TryGetValue("userName", out object userName))
-                {
-                    PhotonNetwork.NickName = userName as string; // Kullan?c? ad? ile güncelle
-                    Debug.Log("User NickName set to: " + PhotonNetwork.NickName);
-                }
-                else
-                {
-                    Debug.Log("User name is empty or not found.");
-                }
-            }
-            else
-            {
-                Debug.Log("Failed to fetch user data.");
-            }
-        });
-
-
-
-       
     }
-
 
 
     public void CreateRoom()

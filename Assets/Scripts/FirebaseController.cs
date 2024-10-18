@@ -25,7 +25,7 @@ public class FirebaseController : MonoBehaviour
     Firebase.Auth.FirebaseUser user;
 
     bool isSignIn = false;
-
+    public string userName;
     private void Start()
     {
         Firebase.FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task => {
@@ -83,7 +83,7 @@ public class FirebaseController : MonoBehaviour
         }
 
         SignInUser(loginEmail.text, loginPassword.text);
-        OpenProfilePanel();
+
     }
 
     public void SignUpUser()
@@ -96,7 +96,7 @@ public class FirebaseController : MonoBehaviour
 
         CreateUser(signupEmail.text, signupPassword.text, signupUserName.text);
         SignInUser(signupEmail.text, signupPassword.text);
-        OpenProfilePanel();
+
     }
 
     public void ForgetPass()
@@ -156,9 +156,13 @@ public class FirebaseController : MonoBehaviour
 
             // Kullanıcı bilgilerini Firestore'a kaydedin
             SaveUserToFirestore(result.User.UserId, userName, email);
-        });
 
+            // Firestore'a kaydedildikten sonra kullanıcı adını al
+            StartCoroutine(GetUserNameByEmail(email, OnUserNameReceived));
+        });
     }
+
+
 
     public void SignInUser(string email, string password)
     {
@@ -172,17 +176,35 @@ public class FirebaseController : MonoBehaviour
             Firebase.Auth.FirebaseUser newUser = task.Result.User;
             Debug.LogFormat("User signed in successfully: {0} ({1})", newUser.DisplayName, newUser.UserId);
 
+            // Kullanıcı adını sakla
+            userName = newUser.DisplayName; // Giriş yaptıktan sonra kullanıcı adını al
 
-            // Profil bilgilerini güncelleyin
+            // Profil bilgilerini güncelle
             profileUserNameText.text = newUser.DisplayName;
             profileUserEmailText.text = newUser.Email;
-            PlayerPrefs.SetString("Email", newUser.Email);
-            PlayerPrefs.SetString("DisplayName", newUser.DisplayName);
+
             // Kullanıcı verilerini Firestore'a kaydet
             SaveUserToFirestore(newUser.UserId, newUser.DisplayName, newUser.Email);
 
-           
+            // Firestore'dan kullanıcı adını almak için coroutine'i başlat
+            StartCoroutine(GetUserNameByEmail(newUser.Email, OnUserNameReceived));
+
+            // Profil panelini aç
+            OpenProfilePanel();
         });
+    }
+
+
+    private void OnUserNameReceived(string userName)
+    {
+        if (userName != null)
+        {
+            Debug.Log($"Kullanıcı adı: {userName}");
+        }
+        else
+        {
+            Debug.Log("Kullanıcı bulunamadı veya bir hata oluştu.");
+        }
     }
 
 
@@ -317,4 +339,40 @@ public class FirebaseController : MonoBehaviour
             ShowNotificationMessage("Success", "Password reset email sent. Please check your inbox.");
         });
     }
+
+    public IEnumerator GetUserNameByEmail(string email, Action<string> onResult)
+    {
+        var db = Firebase.Firestore.FirebaseFirestore.DefaultInstance;
+
+        // Firestore'da 'users' koleksiyonunda e-postaya göre sorgulama yap
+        var query = db.Collection("users").WhereEqualTo("email", email);
+
+        // Sorguyu çalıştır
+        var task = query.GetSnapshotAsync();
+
+        // Sorgu tamamlanana kadar bekle
+        yield return new WaitUntil(() => task.IsCompleted);
+
+        if (task.IsFaulted || task.IsCanceled)
+        {
+            Debug.LogError("Error getting user data: " + task.Exception);
+            onResult(null); // Hata durumunda null döndür
+        }
+        else
+        {
+            // Kullanıcı adı döndür
+            foreach (var document in task.Result.Documents)
+            {
+                var userName = document.GetValue<string>("userName");
+                onResult(userName); // Kullanıcı adını döndür
+                yield break; // İlk bulunan kullanıcı adıyla çık
+            }
+
+            // Eğer kullanıcı bulunamazsa
+            onResult(null);
+        }
+    }
+
+
+
 }
