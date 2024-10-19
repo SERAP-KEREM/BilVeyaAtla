@@ -1447,7 +1447,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &685462599
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1855,7 +1855,7 @@ MonoBehaviour:
   errorText: {fileID: 969936494}
   roomListContent: {fileID: 7635253999956154705}
   roomListItemPrefab: {fileID: 3232617383501690266, guid: fcc8132874310e5468a3e5c00384c711, type: 3}
-  playerListItemPrefab: {fileID: 6798217267297715595, guid: fe94d2654aaaa614fb162c03f31a00d8, type: 3}
+  playerListItemPrefab: {fileID: 5360512104868738096, guid: fe94d2654aaaa614fb162c03f31a00d8, type: 3}
   playerListContent: {fileID: 1097643687}
   startButton: {fileID: 755148769}
 --- !u!114 &781776360

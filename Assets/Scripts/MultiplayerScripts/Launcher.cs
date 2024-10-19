@@ -69,10 +69,22 @@ public class Launcher : MonoBehaviourPunCallbacks
 
         MenuManager.instance.OpenMenu("TitleMenu");
         Debug.Log("Joined Lobby");
-        PhotonNetwork.NickName = "Player " + Random.Range(0, 1000).ToString("0000");
+     //   PhotonNetwork.NickName = "Player " + Random.Range(0, 1000).ToString("0000");
+   //  PhotonNetwork.NickName =_firebaseController.OnUserNameReceived();
 
     }
-
+    public void OnUserNameReceived(string userName)
+    {
+        if (userName != null)
+        {
+            Debug.Log($"Kullan?c? ad?: {userName}");
+            PhotonNetwork.NickName =userName;
+        }
+        else
+        {
+            Debug.Log("Kullan?c? bulunamad? veya bir hata olu?tu.");
+        }
+    }
 
     public void CreateRoom()
     {
@@ -126,7 +138,7 @@ public class Launcher : MonoBehaviourPunCallbacks
     }
     public void StartGame()
     {
-        PhotonNetwork.LoadLevel(1);
+        PhotonNetwork.LoadLevel(2);
     }
 
     public void LeaveRoom()

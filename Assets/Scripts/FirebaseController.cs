@@ -83,7 +83,6 @@ public class FirebaseController : MonoBehaviour
         }
 
         SignInUser(loginEmail.text, loginPassword.text);
-
     }
 
     public void SignUpUser()
@@ -94,9 +93,13 @@ public class FirebaseController : MonoBehaviour
             return;
         }
 
-        CreateUser(signupEmail.text, signupPassword.text, signupUserName.text);
-        SignInUser(signupEmail.text, signupPassword.text);
+        if (signupPassword.text != signupCPassword.text)
+        {
+            ShowNotificationMessage("Error", "Passwords do not match!");
+            return;
+        }
 
+        CreateUser(signupEmail.text, signupPassword.text, signupUserName.text);
     }
 
     public void ForgetPass()
@@ -157,12 +160,10 @@ public class FirebaseController : MonoBehaviour
             // Kullanıcı bilgilerini Firestore'a kaydedin
             SaveUserToFirestore(result.User.UserId, userName, email);
 
-            // Firestore'a kaydedildikten sonra kullanıcı adını al
-            StartCoroutine(GetUserNameByEmail(email, OnUserNameReceived));
+            // Giriş yap
+            SignInUser(email, password);
         });
     }
-
-
 
     public void SignInUser(string email, string password)
     {
@@ -179,34 +180,31 @@ public class FirebaseController : MonoBehaviour
             // Kullanıcı adını sakla
             userName = newUser.DisplayName; // Giriş yaptıktan sonra kullanıcı adını al
 
-            // Profil bilgilerini güncelle
-            profileUserNameText.text = newUser.DisplayName;
-            profileUserEmailText.text = newUser.Email;
-
             // Kullanıcı verilerini Firestore'a kaydet
             SaveUserToFirestore(newUser.UserId, newUser.DisplayName, newUser.Email);
 
-            // Firestore'dan kullanıcı adını almak için coroutine'i başlat
-            StartCoroutine(GetUserNameByEmail(newUser.Email, OnUserNameReceived));
+            // Profil bilgilerini güncelle
+            profileUserNameText.text = newUser.DisplayName;
+            profileUserEmailText.text = newUser.Email;
+            OnUserNameReceived(newUser.DisplayName);
 
             // Profil panelini aç
             OpenProfilePanel();
         });
     }
 
-
-    private void OnUserNameReceived(string userName)
+    public void OnUserNameReceived(string userName)
     {
         if (userName != null)
         {
             Debug.Log($"Kullanıcı adı: {userName}");
+            PhotonNetwork.NickName = userName;
         }
         else
         {
             Debug.Log("Kullanıcı bulunamadı veya bir hata oluştu.");
         }
     }
-
 
     void InitializeFirebase()
     {
@@ -300,30 +298,8 @@ public class FirebaseController : MonoBehaviour
 
     private void HandleAuthTaskError(Task task)
     {
-        Debug.LogError("Auth task encountered an error: " + task.Exception);
-        foreach (Exception exception in task.Exception.Flatten().InnerExceptions)
-        {
-            if (exception is Firebase.FirebaseException firebaseEx)
-            {
-                var errorCode = (AuthError)firebaseEx.ErrorCode;
-                ShowNotificationMessage("Error", GetErrorMessage(errorCode));
-            }
-        }
-    }
-
-    private static string GetErrorMessage(AuthError errorCode)
-    {
-        return errorCode switch
-        {
-            AuthError.AccountExistsWithDifferentCredentials => "An account already exists with different credentials.",
-            AuthError.MissingPassword => "Password is missing.",
-            AuthError.WeakPassword => "The password is too weak.",
-            AuthError.WrongPassword => "The password is incorrect.",
-            AuthError.EmailAlreadyInUse => "An account already exists with this email address.",
-            AuthError.InvalidEmail => "Invalid email address.",
-            AuthError.MissingEmail => "Email address is missing.",
-            _ => "An error occurred."
-        };
+        Debug.LogError("Auth operation failed with error: " + task.Exception);
+        ShowNotificationMessage("Error", "Authentication failed: " + task.Exception.Flatten().InnerExceptions[0].Message);
     }
 
     void ForgetPasswordSubmit(string email)
@@ -335,44 +311,22 @@ public class FirebaseController : MonoBehaviour
                 return;
             }
 
-            Debug.Log("Password reset email sent successfully.");
             ShowNotificationMessage("Success", "Password reset email sent. Please check your inbox.");
         });
     }
 
-    public IEnumerator GetUserNameByEmail(string email, Action<string> onResult)
+    public void SetRememberMe(bool value)
     {
-        var db = Firebase.Firestore.FirebaseFirestore.DefaultInstance;
-
-        // Firestore'da 'users' koleksiyonunda e-postaya göre sorgulama yap
-        var query = db.Collection("users").WhereEqualTo("email", email);
-
-        // Sorguyu çalıştır
-        var task = query.GetSnapshotAsync();
-
-        // Sorgu tamamlanana kadar bekle
-        yield return new WaitUntil(() => task.IsCompleted);
-
-        if (task.IsFaulted || task.IsCanceled)
+        if (value)
         {
-            Debug.LogError("Error getting user data: " + task.Exception);
-            onResult(null); // Hata durumunda null döndür
+            PlayerPrefs.SetString("UserEmail", loginEmail.text);
+            PlayerPrefs.SetString("UserPassword", loginPassword.text);
         }
         else
         {
-            // Kullanıcı adı döndür
-            foreach (var document in task.Result.Documents)
-            {
-                var userName = document.GetValue<string>("userName");
-                onResult(userName); // Kullanıcı adını döndür
-                yield break; // İlk bulunan kullanıcı adıyla çık
-            }
-
-            // Eğer kullanıcı bulunamazsa
-            onResult(null);
+            PlayerPrefs.DeleteKey("UserEmail");
+            PlayerPrefs.DeleteKey("UserPassword");
         }
+        PlayerPrefs.Save();
     }
-
-
-
 }
