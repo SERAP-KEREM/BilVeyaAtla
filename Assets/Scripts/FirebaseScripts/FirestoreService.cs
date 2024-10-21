@@ -11,19 +11,15 @@ public interface IFirestoreService
     Task<List<Question>> GetQuestions();
 }
 
-public class FirestoreService
+public class FirestoreService : IFirestoreService
 {
-
     private FirebaseFirestore db;
 
     public FirestoreService()
     {
         db = FirebaseFirestore.DefaultInstance;
-    }
 
-
-    void Start()
-    {
+        // Firebase'in düzgün ba?lat?ld???ndan emin oluyoruz
         FirebaseApp.CheckAndFixDependenciesAsync().ContinueWithOnMainThread(task => {
             if (task.Result == DependencyStatus.Available)
             {
@@ -36,7 +32,45 @@ public class FirestoreService
         });
     }
 
+    // Firestore'dan sorular? çekme i?lemi
+    public async Task<List<Question>> GetQuestions()
+    {
+        List<Question> questions = new List<Question>();
 
+        try
+        {
+            QuerySnapshot snapshot = await db.Collection("questions").GetSnapshotAsync();
+            foreach (DocumentSnapshot document in snapshot.Documents)
+            {
+                if (document.Exists)
+                {
+                    Dictionary<string, object> data = document.ToDictionary();
+
+                    // 'questionText' ve 'correctAnswer' alanlar?n? string olarak al?yoruz
+                    string questionText = data["questionText"].ToString();
+                    string correctAnswer = data["correctAnswer"].ToString();
+
+                    // 'options' alan?n? List<string> olarak dönü?türüyoruz
+                    List<string> options = new List<string>();
+                    foreach (var option in (List<object>)data["options"])
+                    {
+                        options.Add(option.ToString());
+                    }
+
+                    // Question nesnesini constructor kullanarak olu?turuyoruz
+                    Question question = new Question(questionText, options, correctAnswer);
+
+                    questions.Add(question); // Listeye ekliyoruz
+                }
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Sorular çekilirken bir hata olu?tu: {e.Message}");
+        }
+
+        return questions;
+    }
 
 
     // Soru ekleme i?lemi
