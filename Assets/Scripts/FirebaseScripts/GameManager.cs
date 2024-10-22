@@ -104,11 +104,11 @@ public class GameManager : MonoBehaviourPunCallbacks
             yield return null; // Bir frame bekle
         }
 
-        // Zaman doldu?unda sonuçlar? göster
+        // Zaman doldu?unda sonuçlar? yaln?zca cevap veren oyuncuya göster
         if (isQuestionActive)
         {
-            photonView.RPC("ShowResults", RpcTarget.All, false); // Yan?t verilmediyse sonuçlar? göster
-            photonView.RPC("DisplayTimeUpMessage", RpcTarget.All); // Süre doldu mesaj?n? göster
+            ShowResults(false); // Yan?t verilmediyse sonuçlar? göster
+            DisplayTimeUpMessage(); // Süre doldu mesaj?n? göster
         }
     }
 
@@ -119,6 +119,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         string selectedAnswer = currentQuestion.Options[index]; // Seçilen cevab? al
         bool isCorrect = selectedAnswer == correctAnswer; // Cevab?n do?ru olup olmad???n? kontrol et
 
+        // Cevab? yaln?zca bu oyuncuya gönder
         photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect); // Cevab? di?er oyunculara gönder
         isQuestionActive = false; // Soruyu pasif hale getir
     }
@@ -128,12 +129,10 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         if (PhotonNetwork.LocalPlayer.ActorNumber == playerId) // E?er bu cevap veren oyuncu sensen
         {
-            isQuestionActive = false; // Soruyu pasif hale getir
-            photonView.RPC("ShowResults", RpcTarget.All, isCorrect); // Sonuçlar? yaln?zca cevap veren oyuncuya göster
+            ShowResults(isCorrect); // Sonuçlar? yaln?zca cevap veren oyuncuya göster
         }
     }
 
-    [PunRPC]
     private void ShowResults(bool isCorrect)
     {
         resultPanel.SetActive(true); // Sonuç panelini aç
@@ -144,17 +143,20 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             button.gameObject.SetActive(false); // Seçenek butonlar?n? kapat
         }
+
+        timerText.gameObject.SetActive(false); // Zamanlay?c?y? gizle
     }
 
-    [PunRPC]
     private void DisplayTimeUpMessage()
     {
         resultText.text = "Süre Bitti!"; // Süre bitti mesaj?n? göster
         resultPanel.SetActive(true); // Sonuç panelini aç
+        timerText.gameObject.SetActive(false); // Zamanlay?c?y? gizle
     }
 
     private void CloseResultPanel()
     {
         resultPanel.SetActive(false); // Sonuç panelini kapat
+        timerText.gameObject.SetActive(true); // Zamanlay?c?y? görünür yap
     }
 }
