@@ -4,8 +4,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-
-public class QuestionUIController : MonoBehaviourPunCallbacks, IQuestionUI
+ class QuestionUIController : MonoBehaviourPunCallbacks, IQuestionUI
 {
     public TextMeshProUGUI questionText;
     public Button[] optionButtons;

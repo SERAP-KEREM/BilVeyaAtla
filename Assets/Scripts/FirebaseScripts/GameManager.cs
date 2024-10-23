@@ -1,5 +1,4 @@
 using Photon.Pun;
-using Photon.Realtime;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -20,6 +19,8 @@ public class GameManager : MonoBehaviourPunCallbacks
     public GameObject resultPanel; // Sonuç paneli
     public TextMeshProUGUI resultText; // Sonuç metni
     public Button closeButton; // Kapatma butonu
+
+    private Coroutine questionTimerCoroutine; // Soru zamanlay?c? korutini
 
     private void Start()
     {
@@ -59,7 +60,6 @@ public class GameManager : MonoBehaviourPunCallbacks
 
             currentQuestion = GetRandomQuestion(); // Rastgele bir soru seç
             photonView.RPC("SendQuestionToAllPlayers", RpcTarget.All, currentQuestion.QuestionText, currentQuestion.Options.ToArray(), currentQuestion.CorrectAnswer); // Soruyu tüm oyunculara gönder
-            StartCoroutine(StartQuestionTimer()); // Zamanlay?c?y? ba?lat
         }
         catch (System.Exception ex)
         {
@@ -87,13 +87,25 @@ public class GameManager : MonoBehaviourPunCallbacks
             optionButtons[i].gameObject.SetActive(true); // Butonlar? görünür hale getir
 
             int index = i; // Local de?i?ken olu?tur
+            optionButtons[i].onClick.RemoveAllListeners(); // Mevcut dinleyicileri kald?r
             optionButtons[i].onClick.AddListener(() => OnOptionSelected(index, correctAnswer)); // Cevap seçimi
         }
 
         isQuestionActive = true; // Sorunun aktif oldu?unu belirt
+        StartQuestionTimer(); // Zamanlay?c?y? ba?lat
     }
 
-    private IEnumerator StartQuestionTimer()
+    private void StartQuestionTimer()
+    {
+        if (questionTimerCoroutine != null)
+        {
+            StopCoroutine(questionTimerCoroutine); // E?er zaten bir zamanlay?c? varsa durdur
+        }
+
+        questionTimerCoroutine = StartCoroutine(QuestionTimer()); // Yeni bir zamanlay?c? ba?lat
+    }
+
+    private IEnumerator QuestionTimer()
     {
         timeRemaining = 10f; // Süreyi 10 saniye olarak ayarla
 
@@ -104,11 +116,12 @@ public class GameManager : MonoBehaviourPunCallbacks
             yield return null; // Bir frame bekle
         }
 
-        // Zaman doldu?unda sonuçlar? yaln?zca cevap veren oyuncuya göster
+        // Zaman doldu?unda sonuçlar? tüm oyunculara göster
         if (isQuestionActive)
         {
-            ShowResults(false); // Yan?t verilmediyse sonuçlar? göster
+            isQuestionActive = false; // Soruyu pasif hale getir
             DisplayTimeUpMessage(); // Süre doldu mesaj?n? göster
+            ShowResults(false); // Yan?t verilmediyse sonuçlar? göster
         }
     }
 
@@ -120,16 +133,32 @@ public class GameManager : MonoBehaviourPunCallbacks
         bool isCorrect = selectedAnswer == correctAnswer; // Cevab?n do?ru olup olmad???n? kontrol et
 
         // Cevab? yaln?zca bu oyuncuya gönder
-        photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect); // Cevab? di?er oyunculara gönder
+        photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect); // Cevab? sadece bu oyuncuya gönder
         isQuestionActive = false; // Soruyu pasif hale getir
     }
 
     [PunRPC]
     private void SubmitAnswer(int playerId, bool isCorrect)
     {
-        if (PhotonNetwork.LocalPlayer.ActorNumber == playerId) // E?er bu cevap veren oyuncu sensen
+        // Her oyuncunun cevab?n? göster
+        ShowResultsForPlayer(playerId, isCorrect); // Sonuçlar? oyuncuya göster
+    }
+
+    private void ShowResultsForPlayer(int playerId, bool isCorrect)
+    {
+        // Sonuç panelini yaln?zca ilgili oyuncu için aç
+        if (playerId == PhotonNetwork.LocalPlayer.ActorNumber) // E?er bu oyuncunun cevab?ysa
         {
-            ShowResults(isCorrect); // Sonuçlar? yaln?zca cevap veren oyuncuya göster
+            resultPanel.SetActive(true); // Sonuç panelini aç
+            resultText.text = isCorrect ? "Do?ru Cevap!" : "Yanl?? Cevap!"; // Sonuç mesaj?n? güncelle
+
+            // Butonlar? kapat
+            foreach (var button in optionButtons)
+            {
+                button.gameObject.SetActive(false); // Seçenek butonlar?n? kapat
+            }
+
+            timerText.gameObject.SetActive(false); // Zamanlay?c?y? gizle
         }
     }
 
@@ -158,5 +187,9 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         resultPanel.SetActive(false); // Sonuç panelini kapat
         timerText.gameObject.SetActive(true); // Zamanlay?c?y? görünür yap
+        if (PhotonNetwork.IsMasterClient)
+        {
+            FetchAndShowRandomQuestion(); // Yeni soruyu göster
+        }
     }
 }

@@ -43,6 +43,11 @@ MonoBehaviour:
   - SubmitAnswer
   - ShowResults
   - DisplayTimeUpMessage
+  - OnPlayerTimeout
+  - EndGame
+  - ShowQuestion
+  - UpdateScore
+  - ShowResultsForAllPlayers
   DisableAutoOpenWizard: 1
   ShowSettings: 0
   DevRegionSetOnce: 1

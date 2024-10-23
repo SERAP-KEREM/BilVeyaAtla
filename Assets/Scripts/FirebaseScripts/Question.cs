@@ -13,6 +13,4 @@ public class Question
         CorrectAnswer = correctAnswer;
     }
 
-
-  //  public Question() { }
 }
