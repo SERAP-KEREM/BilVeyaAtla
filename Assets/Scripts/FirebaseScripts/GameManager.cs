@@ -1,76 +1,189 @@
-using UnityEngine;
 using Photon.Pun;
-using Photon.Realtime;
-using UnityEngine.UI;
+using System.Collections;
 using System.Collections.Generic;
-
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
 public class GameManager : MonoBehaviourPunCallbacks
 {
-    public GameObject resultsPanel;
-    public Text resultText;
-    public Button answerButton; // Cevap butonu
-    private Dictionary<int, bool> playerAnswers = new Dictionary<int, bool>(); // Oyuncular?n cevaplar?n? tutar
+    private IFirestoreService firestoreService;
+    private List<Question> allQuestions;
+    private Question currentQuestion;
+    private float timeRemaining = 10f;
+    private bool isQuestionActive = false;
 
-    void Start()
+    public TextMeshProUGUI questionText;
+    public Button[] optionButtons;
+    public TextMeshProUGUI timerText;
+    public GameObject resultPanel;
+    public TextMeshProUGUI resultText;
+    public Button closeButton;
+
+    private Coroutine questionTimerCoroutine;
+    private Dictionary<int, int> playerScores = new Dictionary<int, int>();
+    private int answeredPlayers = 0; // Cevap veren oyuncu say?s?n? tutan sayaç
+
+    private void Start()
     {
-        resultsPanel.SetActive(false); // Sonuç panelini gizli tut
-        answerButton.onClick.AddListener(() => OnAnswerButtonClick(true)); // Buton t?klamas?
+        firestoreService = new FirestoreService();
+
+        if (questionText == null || optionButtons == null || timerText == null || resultPanel == null || resultText == null)
+        {
+            Debug.LogError("Bir veya daha fazla UI bile?eni atanmad?!");
+            return;
+        }
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            FetchAndShowRandomQuestion();
+        }
+
+        closeButton.onClick.AddListener(CloseResultPanel);
     }
 
-    // Oyuncunun cevap vermesi durumunda bu fonksiyon tetiklenir
-    public void OnAnswerButtonClick(bool isCorrect)
+    private async void FetchAndShowRandomQuestion()
     {
-        Debug.Log("Cevap butonuna t?kland?. Do?ru mu? " + isCorrect);
+        try
+        {
+            allQuestions = await firestoreService.GetQuestions();
 
-        // Tüm oyunculara cevab? gönder
-        photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect);
+            if (allQuestions == null || allQuestions.Count == 0)
+            {
+                Debug.LogError("Firestore'dan hiç soru al?namad?.");
+                return;
+            }
+
+            currentQuestion = GetRandomQuestion();
+            photonView.RPC("SendQuestionToAllPlayers", RpcTarget.All, currentQuestion.QuestionText, currentQuestion.Options.ToArray(), currentQuestion.CorrectAnswer);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"Soru çekme i?lemi s?ras?nda hata olu?tu: {ex.Message}");
+        }
     }
 
-    // Cevap gönderildi?inde bu RPC fonksiyonu tetiklenir
+    private Question GetRandomQuestion()
+    {
+        int randomIndex = Random.Range(0, allQuestions.Count);
+        Question selectedQuestion = allQuestions[randomIndex];
+        allQuestions.RemoveAt(randomIndex);
+        return selectedQuestion;
+    }
+
     [PunRPC]
-    public void SubmitAnswer(int playerId, bool isCorrect)
+    private void SendQuestionToAllPlayers(string questionText, string[] options, string correctAnswer)
     {
-        Debug.Log($"Oyuncu {playerId} cevap verdi: {isCorrect}");
+        this.questionText.text = questionText;
 
-        // Cevab? kaydet
-        if (!playerAnswers.ContainsKey(playerId))
+        for (int i = 0; i < options.Length; i++)
         {
-            playerAnswers.Add(playerId, isCorrect);
+            optionButtons[i].GetComponentInChildren<TextMeshProUGUI>().text = options[i];
+            optionButtons[i].gameObject.SetActive(true);
+
+            int index = i;
+            optionButtons[i].onClick.RemoveAllListeners();
+            optionButtons[i].onClick.AddListener(() => OnOptionSelected(index, correctAnswer));
         }
 
-        // Tüm oyuncular?n cevap verip vermedi?ini kontrol et
-        if (playerAnswers.Count == PhotonNetwork.PlayerList.Length)
+        isQuestionActive = true;
+        answeredPlayers = 0; // Yeni soru için sayaç s?f?rlan?r
+        StartQuestionTimer();
+    }
+
+    private void StartQuestionTimer()
+    {
+        if (questionTimerCoroutine != null)
         {
-            ShowResultsForAllPlayers();
+            StopCoroutine(questionTimerCoroutine);
+        }
+
+        questionTimerCoroutine = StartCoroutine(QuestionTimer());
+    }
+
+    private IEnumerator QuestionTimer()
+    {
+        timeRemaining = 10f;
+
+        while (timeRemaining > 0 && isQuestionActive)
+        {
+            timerText.text = $"Kalan Süre: {timeRemaining.ToString("F0")}";
+            timeRemaining -= Time.deltaTime;
+            yield return null;
+        }
+
+        if (isQuestionActive)
+        {
+            isQuestionActive = false;
+            DisplayTimeUpMessage();
+            ShowResultsForAllPlayers(false);
         }
     }
 
-    // Tüm oyuncular?n cevaplar? al?nd???nda sonuçlar? göster
-    private void ShowResultsForAllPlayers()
+    public void OnOptionSelected(int index, string correctAnswer)
     {
-        resultsPanel.SetActive(true); // Sonuç panelini göster
+        if (!isQuestionActive || currentQuestion == null) return;
 
-        // Tüm oyuncular?n sonuçlar?n? tek tek göster
-        foreach (var answer in playerAnswers)
-        {
-            Debug.Log($"Oyuncu {answer.Key}, Do?ru mu: {answer.Value}");
-        }
+        string selectedAnswer = currentQuestion.Options[index];
+        bool isCorrect = selectedAnswer == correctAnswer;
 
-        // Örnek: ?lk oyuncunun sonucunu göster
-        bool isCorrect = playerAnswers[PhotonNetwork.LocalPlayer.ActorNumber];
-        ShowResultsForPlayer(isCorrect);
+        photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect);
+        isQuestionActive = false;
     }
 
-    // Oyuncu bazl? sonuçlar? göster
-    private void ShowResultsForPlayer(bool isCorrect)
+    [PunRPC]
+    private void SubmitAnswer(int playerId, bool isCorrect)
     {
+        if (!playerScores.ContainsKey(playerId))
+        {
+            playerScores[playerId] = 0;
+        }
+
         if (isCorrect)
         {
-            resultText.text = "Do?ru cevap verdiniz!";
+            playerScores[playerId] += 1; // Do?ru cevaba puan ekle
         }
-        else
+
+        ShowResultsForPlayer(isCorrect);
+
+        // Cevap veren oyuncu say?s?n? artt?r
+        answeredPlayers++;
+
+        // Tüm oyuncular cevap verince sonuçlar? göster
+        if (answeredPlayers == PhotonNetwork.CurrentRoom.PlayerCount)
         {
-            resultText.text = "Yanl?? cevap verdiniz!";
+            photonView.RPC("ShowResultsForAllPlayers", RpcTarget.All, isCorrect);
+        }
+    }
+
+    private void ShowResultsForPlayer(bool isCorrect)
+    {
+        resultPanel.SetActive(true);
+        resultText.text = isCorrect ? "Do?ru Cevap!" : "Yanl?? Cevap!";
+    }
+
+    [PunRPC]
+    private void ShowResultsForAllPlayers(bool isCorrect)
+    {
+        resultPanel.SetActive(true);
+        resultText.text = isCorrect ? "Do?ru Cevap!" : "Yanl?? Cevap!";
+    }
+
+    private void DisplayTimeUpMessage()
+    {
+        resultText.text = "Süre Bitti!";
+        resultPanel.SetActive(true);
+        timerText.gameObject.SetActive(false);
+    }
+
+    private void CloseResultPanel()
+    {
+        resultPanel.SetActive(false);
+        timerText.gameObject.SetActive(true);
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            FetchAndShowRandomQuestion();
         }
     }
 }
+
