@@ -1,9 +1,10 @@
-using Photon.Pun;
+﻿using Photon.Pun;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+
 public class GameManager : MonoBehaviourPunCallbacks
 {
     private IFirestoreService firestoreService;
@@ -21,15 +22,15 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     private Coroutine questionTimerCoroutine;
     private Dictionary<int, int> playerScores = new Dictionary<int, int>();
-    private int answeredPlayers = 0; // Cevap veren oyuncu say?s?n? tutan saya�
 
     private void Start()
     {
         firestoreService = new FirestoreService();
 
+        // UI bileşenlerini kontrol et
         if (questionText == null || optionButtons == null || timerText == null || resultPanel == null || resultText == null)
         {
-            Debug.LogError("Bir veya daha fazla UI bile?eni atanmad?!");
+            Debug.LogError("Bir veya daha fazla UI bileşeni atanmadı!");
             return;
         }
 
@@ -49,7 +50,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
             if (allQuestions == null || allQuestions.Count == 0)
             {
-                Debug.LogError("Firestore'dan hi� soru al?namad?.");
+                Debug.LogError("Firestore'dan hiç soru alınamadı.");
                 return;
             }
 
@@ -58,7 +59,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"Soru �ekme i?lemi s?ras?nda hata olu?tu: {ex.Message}");
+            Debug.LogError($"Soru çekme işlemi sırasında hata oluştu: {ex.Message}");
         }
     }
 
@@ -86,7 +87,6 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
 
         isQuestionActive = true;
-        answeredPlayers = 0; // Yeni soru i�in saya� s?f?rlan?r
         StartQuestionTimer();
     }
 
@@ -106,7 +106,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         while (timeRemaining > 0 && isQuestionActive)
         {
-            timerText.text = $"Kalan S�re: {timeRemaining.ToString("F0")}";
+            timerText.text = $"Kalan Süre: {timeRemaining.ToString("F0")}";
             timeRemaining -= Time.deltaTime;
             yield return null;
         }
@@ -115,7 +115,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             isQuestionActive = false;
             DisplayTimeUpMessage();
-            ShowResultsForAllPlayers(false);
+            photonView.RPC("ShowResultsForPlayer", RpcTarget.All, false); // Süre bitiminde yanlış kabul
         }
     }
 
@@ -127,7 +127,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         bool isCorrect = selectedAnswer == correctAnswer;
 
         photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect);
-        isQuestionActive = false;
+        isQuestionActive = false; // Cevap verildiği için soruyu kapat
     }
 
     [PunRPC]
@@ -140,37 +140,22 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         if (isCorrect)
         {
-            playerScores[playerId] += 1; // Do?ru cevaba puan ekle
+            playerScores[playerId] += 1; // Doğru cevaba puan ekle
         }
 
+        // Oyuncuya sonuç göster
         ShowResultsForPlayer(isCorrect);
-
-        // Cevap veren oyuncu say?s?n? artt?r
-        answeredPlayers++;
-
-        // T�m oyuncular cevap verince sonu�lar? g�ster
-        if (answeredPlayers == PhotonNetwork.CurrentRoom.PlayerCount)
-        {
-            photonView.RPC("ShowResultsForAllPlayers", RpcTarget.All, isCorrect);
-        }
     }
 
     private void ShowResultsForPlayer(bool isCorrect)
     {
         resultPanel.SetActive(true);
-        resultText.text = isCorrect ? "Do?ru Cevap!" : "Yanl?? Cevap!";
-    }
-
-    [PunRPC]
-    private void ShowResultsForAllPlayers(bool isCorrect)
-    {
-        resultPanel.SetActive(true);
-        resultText.text = isCorrect ? "Do?ru Cevap!" : "Yanl?? Cevap!";
+        resultText.text = isCorrect ? "Doğru Cevap!" : "Yanlış Cevap!";
     }
 
     private void DisplayTimeUpMessage()
     {
-        resultText.text = "S�re Bitti!";
+        resultText.text = "Süre Bitti!";
         resultPanel.SetActive(true);
         timerText.gameObject.SetActive(false);
     }
@@ -186,4 +171,3 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
     }
 }
-
