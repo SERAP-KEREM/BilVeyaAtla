@@ -73,6 +73,7 @@ public class FirestoreService : IFirestoreService
     }
 
 
+
     // Soru ekleme i?lemi
     public async Task AddQuestion(Question question)
     {

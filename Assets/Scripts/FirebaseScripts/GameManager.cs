@@ -22,12 +22,12 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     private Coroutine questionTimerCoroutine;
     private Dictionary<int, int> playerScores = new Dictionary<int, int>();
+    private int answeredPlayers = 0; // Cevap veren oyuncu sayısını tutan sayaç
 
     private void Start()
     {
         firestoreService = new FirestoreService();
 
-        // UI bileşenlerini kontrol et
         if (questionText == null || optionButtons == null || timerText == null || resultPanel == null || resultText == null)
         {
             Debug.LogError("Bir veya daha fazla UI bileşeni atanmadı!");
@@ -87,6 +87,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
 
         isQuestionActive = true;
+        answeredPlayers = 0; // Yeni soru için sayaç sıfırlanır
         StartQuestionTimer();
     }
 
@@ -115,7 +116,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             isQuestionActive = false;
             DisplayTimeUpMessage();
-            photonView.RPC("ShowResultsForPlayer", RpcTarget.All, false); // Süre bitiminde yanlış kabul
+            photonView.RPC("ShowResultsForAllPlayers", RpcTarget.All, false); // Süre bitiminde yanlış kabul
         }
     }
 
@@ -127,7 +128,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         bool isCorrect = selectedAnswer == correctAnswer;
 
         photonView.RPC("SubmitAnswer", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber, isCorrect);
-        isQuestionActive = false; // Cevap verildiği için soruyu kapat
+        isQuestionActive = false;
     }
 
     [PunRPC]
@@ -143,11 +144,31 @@ public class GameManager : MonoBehaviourPunCallbacks
             playerScores[playerId] += 1; // Doğru cevaba puan ekle
         }
 
-        // Oyuncuya sonuç göster
-        ShowResultsForPlayer(isCorrect);
+        // Cevap veren oyuncu sayısını arttır
+        answeredPlayers++;
+
+        // Her oyuncu için sonuçları göster
+        ShowResultsForPlayer(playerId, isCorrect);
+
+        // Tüm oyuncular cevap verince sonuçları göster
+        if (answeredPlayers == PhotonNetwork.CurrentRoom.PlayerCount)
+        {
+            photonView.RPC("ShowResultsForAllPlayers", RpcTarget.All, isCorrect);
+        }
     }
 
-    private void ShowResultsForPlayer(bool isCorrect)
+    private void ShowResultsForPlayer(int playerId, bool isCorrect)
+    {
+        // Sadece sonuçları kendi oyuncusuna göstermek için
+        if (PhotonNetwork.LocalPlayer.ActorNumber == playerId)
+        {
+            resultPanel.SetActive(true);
+            resultText.text = isCorrect ? "Doğru Cevap!" : "Yanlış Cevap!";
+        }
+    }
+
+    [PunRPC]
+    private void ShowResultsForAllPlayers(bool isCorrect)
     {
         resultPanel.SetActive(true);
         resultText.text = isCorrect ? "Doğru Cevap!" : "Yanlış Cevap!";
