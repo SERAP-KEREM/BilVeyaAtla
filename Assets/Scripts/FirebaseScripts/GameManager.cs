@@ -1,166 +1,66 @@
 ﻿using Photon.Pun;
-using System.Collections;
-using System.Collections.Generic;
-using TMPro;
+using Photon.Realtime;
 using UnityEngine;
-using UnityEngine.UI;
 
+/// <summary>
+/// GameManager sınıfı, çok oyunculu bilgi yarışmasında oyunun akışını yönetir.
+/// </summary>
 public class GameManager : MonoBehaviourPunCallbacks
 {
-    private IFirestoreService firestoreService;  // Firestore hizmeti için arayüz
-    private List<Question> allQuestions;          // Tüm soruların listesi
-    private Question currentQuestion;             // Şu anki soru
-    private float timeRemaining = 10f;            // Kalan süre
-    private bool isQuestionActive = false;        // Soru aktif mi?
+    private PlayerManager playerManager; // PlayerManager referansı
 
-    public TextMeshProUGUI questionText;         // Soru metni için TextMeshPro
-    public Button[] optionButtons;                // Seçenek butonları
-    public TextMeshProUGUI timerText;             // Zamanlayıcı metni için TextMeshPro
-    public GameObject resultPanel;                // Sonuç paneli
-    public TextMeshProUGUI resultText;            // Sonuç metni için TextMeshPro
-    public Button closeButton;                     // Kapat butonu
-
-    private Coroutine questionTimerCoroutine;     // Soru zamanlayıcısı
-    private Dictionary<int, int> playerScores = new Dictionary<int, int>(); // Oyuncu skorları
-
-    void Start()
+    private void Awake()
     {
-        firestoreService = new FirestoreService(); // Firestore hizmetini başlat
-        if (PhotonNetwork.IsMasterClient) // Sadece host bu işlemi yapar
-        {
-            LoadNewQuestion(); // Yeni soruyu yükle
-        }
+        playerManager = GetComponent<PlayerManager>(); // PlayerManager bileşenini al
     }
 
-    // Yeni bir soru yüklemek için çağrılır
-    private async void LoadNewQuestion()
+    /// <summary>
+    /// Oyun başladığında çağrılır.
+    /// </summary>
+    public void StartGame()
     {
-        allQuestions = await firestoreService.GetQuestions(); // Soruları Firestore'dan çek
-        if (allQuestions.Count > 0)
+        // Oyun başlangıç işlemleri
+        // Her oyuncunun katılımını kontrol et
+        foreach (Player player in PhotonNetwork.PlayerList)
         {
-            currentQuestion = GetRandomQuestion(); // Rastgele bir soru al
-            // Sadece host RPC'yi çağırır
-            photonView.RPC("DisplayQuestionRPC", RpcTarget.All, currentQuestion.QuestionText, currentQuestion.Options.ToArray(), currentQuestion.CorrectAnswer);
+            playerManager.OnPlayerJoined(player.ActorNumber); // Her oyuncu için PlayerManager'da kaydet
         }
-        else
-        {
-            Debug.LogError("No questions available.");
-        }
+
+        // Oyunun geri kalan başlangıç mantığını buraya ekleyebilirsiniz.
     }
 
-    // Rastgele bir soru seçer
-    private Question GetRandomQuestion()
+    /// <summary>
+    /// Oyuncunun cevabını kontrol eder.
+    /// </summary>
+    /// <param name="playerId">Cevap veren oyuncunun kimliği.</param>
+    /// <param name="isCorrect">Cevabın doğruluğunu belirten bir boolean.</param>
+    public void CheckAnswer(int playerId, bool isCorrect)
     {
-        int randomIndex = Random.Range(0, allQuestions.Count);
-        return allQuestions[randomIndex];
+        playerManager.UpdatePlayerScore(playerId, isCorrect); // Oyuncunun puanını güncelle
+
+        // Sonuçları diğer oyunculara bildirin
+        photonView.RPC("NotifyOthers", RpcTarget.Others, playerId, isCorrect);
     }
 
-    // Soruyu ekrana getirir
+    /// <summary>
+    /// Diğer oyunculara cevabın sonucunu bildirir.
+    /// </summary>
+    /// <param name="playerId">Cevap veren oyuncunun kimliği.</param>
+    /// <param name="isCorrect">Cevabın doğruluğu.</param>
     [PunRPC]
-    private void DisplayQuestionRPC(string questionText, string[] options, string correctAnswer)
+    private void NotifyOthers(int playerId, bool isCorrect)
     {
-        // Question nesnesini oluştururken gerekli tüm parametreleri sağlayın
-        this.currentQuestion = new Question(questionText, new List<string>(options), correctAnswer);
-        DisplayQuestion(this.currentQuestion); // Soru göster
-        StartQuestionTimer(); // Zamanlayıcıyı başlat
+        // Diğer oyunculara cevabın sonucunu bildirin (UI güncellemeleri vb. için kullanılabilir)
+        Debug.Log($"Oyuncu {playerId} cevabını {(isCorrect ? "doğru" : "yanlış")} verdi.");
     }
 
-
-    private void DisplayQuestion(Question question)
-    {
-        questionText.text = question.QuestionText; // Soru metnini ayarla
-
-        for (int i = 0; i < optionButtons.Length; i++)
-        {
-            if (i < question.Options.Count)
-            {
-                optionButtons[i].GetComponentInChildren<TextMeshProUGUI>().text = question.Options[i];
-                optionButtons[i].gameObject.SetActive(true);
-            }
-            else
-            {
-                optionButtons[i].gameObject.SetActive(false); // Fazla butonları gizle
-            }
-        }
-
-        isQuestionActive = true; // Soru aktif
-    }
-
-    // Soru zamanlayıcısını başlatır
-    private void StartQuestionTimer()
-    {
-        timeRemaining = 10f; // Süreyi sıfırla
-        timerText.text = timeRemaining.ToString("F0");
-        if (questionTimerCoroutine != null)
-        {
-            StopCoroutine(questionTimerCoroutine); // Önceki zamanlayıcıyı durdur
-        }
-        questionTimerCoroutine = StartCoroutine(QuestionTimer()); // Yeni zamanlayıcı başlat
-    }
-
-    // Sorunun zamanlayıcısı
-    private IEnumerator QuestionTimer()
-    {
-        while (timeRemaining > 0)
-        {
-            yield return new WaitForSeconds(1);
-            timeRemaining--;
-            timerText.text = timeRemaining.ToString("F0"); // Kalan süreyi güncelle
-        }
-
-        // Süre dolduğunda sonuç göster
-        ShowResult(false);
-    }
-
-    // Seçeneğe tıklama işlemi
-    public void OnOptionSelected(int optionIndex)
-    {
-        // Buton indeksinin geçerli olup olmadığını kontrol edin
-        if (optionIndex < 0 || optionIndex >= optionButtons.Length)
-        {
-            Debug.LogError($"Geçersiz buton indeksi: {optionIndex}. Toplam buton sayısı: {optionButtons.Length}");
-            return; // Hata durumunda metodu sonlandır
-        }
-
-        Debug.Log($"Butona tıklandı: Seçenek İndeksi {optionIndex}");
-        if (isQuestionActive)
-        {
-            string selectedAnswer = optionButtons[optionIndex].GetComponentInChildren<TextMeshProUGUI>().text; // Seçilen cevabı al
-            bool isCorrect = selectedAnswer == currentQuestion.CorrectAnswer; // Cevabın doğruluğunu kontrol et
-
-            ShowResult(isCorrect); // Sonucu göster
-        }
-    }
-
-    // Sonuç panelini göster
-    private void ShowResult(bool isCorrect)
-    {
-        isQuestionActive = false; // Soru artık aktif değil
-        if (isCorrect)
-        {
-            resultText.text = "Doğru cevap!";
-            UpdatePlayerScore(); // Skoru güncelle
-        }
-        else
-        {
-            resultText.text = "Yanlış cevap! Doğru cevap: " + currentQuestion.CorrectAnswer;
-        }
-
-        resultPanel.SetActive(true); // Sonuç panelini aç
-        StopCoroutine(questionTimerCoroutine); // Zamanlayıcıyı durdur
-    }
-
-    // Oyuncunun skorunu günceller
-    private void UpdatePlayerScore()
-    {
-        // Burada, oyuncunun skorunu güncelleme mantığını yazabilirsiniz
-        // playerScores içindeki ilgili oyuncunun puanını artırın
-    }
-
-    // Kapat butonuna tıklandığında
-    public void CloseResultPanel()
-    {
-        resultPanel.SetActive(false); // Sonuç panelini kapat
-        LoadNewQuestion(); // Yeni soru yükle
-    }
+    /// <summary>
+    /// Oyuncu çıkış yaptığında çağrılır.
+    /// </summary>
+    /// <param name="playerId">Çıkan oyuncunun kimliği.</param>
+    //public void OnPlayerLeft(int playerId)
+    //{
+    //    // Çıkan oyuncunun puan bilgilerini kaldır
+    //    playerManager.RemovePlayer(playerId);
+    //}
 }
